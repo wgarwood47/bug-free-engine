@@ -1,0 +1,12 @@
+# Environment file with secrets
+.env
+
+# Keep volume directories but ignore contents
+volumes/db/data/
+volumes/db/init/*
+!volumes/db/init/.gitkeep
+volumes/storage/*
+!volumes/storage/.gitkeep
+
+# Logs
+*.log
