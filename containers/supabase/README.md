@@ -1,278 +1,203 @@
 # Self-Hosted Supabase
 
-This directory contains container configuration for running Supabase locally using **Docker** or **Podman**.
+This directory contains the **official Supabase Docker Compose** configuration for self-hosting in production or staging environments.
+
+> **For local development**, use the Supabase CLI instead (see below).
+
+## Two Options for Running Supabase
+
+### Option 1: Supabase CLI (Recommended for Development)
+
+The simplest way to run Supabase locally:
+
+```bash
+cd ../onlypawsfrontend
+npx supabase start
+```
+
+This automatically handles all migrations and provides:
+- Studio: http://127.0.0.1:54323
+- API: http://127.0.0.1:54321
+- Database: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+
+### Option 2: Docker Compose (For Production/Staging)
+
+This directory contains the official Supabase Docker setup for self-hosting.
 
 ## Services Included
 
-| Service | Description | Port |
-|---------|-------------|------|
-| PostgreSQL | Database | 5432 |
-| Kong | API Gateway | 8000 (HTTP), 8443 (HTTPS) |
+| Service | Description | Default Port |
+|---------|-------------|--------------|
+| Studio | Admin dashboard | 8000 (via Kong) |
+| Kong | API Gateway | 8000, 8443 |
 | GoTrue | Authentication | Internal |
 | PostgREST | REST API | Internal |
 | Realtime | WebSocket server | Internal |
 | Storage | File storage | Internal |
-| Studio | Admin dashboard | 3001 |
+| PostgreSQL | Database | 5432 |
+| Analytics | Logflare | 4000 |
+| Edge Functions | Deno runtime | Internal |
+| Supavisor | Connection pooler | 6543 |
 
-## Quick Start
+## Quick Start (Docker Compose)
 
-### 1. Copy environment file
+### 1. Copy and configure environment
 
 ```bash
 cp .env.example .env
+# Edit .env with your secrets
 ```
 
 ### 2. Generate secure secrets
 
 ```bash
-# Generate JWT secret
-openssl rand -base64 32
+# Generate passwords and keys
+openssl rand -hex 32  # For JWT_SECRET
+openssl rand -hex 24  # For POSTGRES_PASSWORD
+openssl rand -hex 32  # For SECRET_KEY_BASE
+openssl rand -hex 16  # For VAULT_ENC_KEY
+openssl rand -hex 16  # For PG_META_CRYPTO_KEY
 
-# Generate secret key base
-openssl rand -base64 64
-
-# Generate Postgres password
-openssl rand -base64 24
+# Generate API keys using your JWT_SECRET
+./scripts/generate-keys.sh YOUR_JWT_SECRET
 ```
 
-Update the `.env` file with your generated secrets.
+### 3. Start services
 
-### 3. Generate API keys
-
-You need to generate `ANON_KEY` and `SERVICE_ROLE_KEY` using your JWT secret.
-
-Using the Supabase CLI:
 ```bash
-npx supabase@latest gen keys --jwt-secret YOUR_JWT_SECRET
-```
-
-Or visit: https://supabase.com/docs/guides/self-hosting/docker#generate-api-keys
-
-### 4. Start the services
-
-Using the helper script (auto-detects Docker or Podman):
-```bash
-./start.sh
-```
-
-Or manually:
-
-**Docker:**
-```bash
+# Docker
 docker compose up -d
+
+# Podman (set DOCKER_HOST first)
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+docker-compose up -d
 ```
 
-**Podman:**
-```bash
-# Using podman-compose (install: pip install podman-compose)
-podman-compose up -d
-
-# Or using podman with compose plugin
-podman compose up -d
-```
-
-### 5. Access the services
+### 4. Access services
 
 - **API Gateway**: http://localhost:8000
-- **Supabase Studio**: http://localhost:3001
-- **PostgreSQL**: localhost:5432
+- **Studio**: http://localhost:8000 (via Kong, login with DASHBOARD_USERNAME/PASSWORD)
+- **Database**: localhost:5432
+
+## Directory Structure
+
+```
+containers/supabase/
+├── docker-compose.yml      # Official Supabase compose file
+├── .env.example            # Environment template
+├── scripts/
+│   ├── setup.sh           # Automated setup script
+│   └── generate-keys.sh   # JWT key generator
+└── volumes/
+    ├── api/kong.yml       # Kong API gateway config
+    ├── db/                # Database init scripts
+    │   ├── roles.sql
+    │   ├── webhooks.sql
+    │   ├── jwt.sql
+    │   ├── realtime.sql
+    │   ├── logs.sql
+    │   ├── pooler.sql
+    │   └── _supabase.sql
+    ├── functions/main/    # Edge functions
+    ├── logs/vector.yml    # Log collection config
+    ├── pooler/pooler.exs  # Connection pooler config
+    ├── snippets/          # SQL snippets for Studio
+    └── storage/           # File storage
+```
 
 ## Connecting Your Frontend
 
-Update your frontend `.env` file:
-
 ```env
+# For Docker Compose self-hosting
 NEXT_PUBLIC_SUPABASE_URL=http://localhost:8000
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key-here
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-anon-key
+
+# For Supabase CLI
+NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
 ```
 
----
+## Commands
 
-## Docker vs Podman
-
-This configuration supports both container runtimes:
-
-| Feature | Docker | Podman |
-|---------|--------|--------|
-| Command | `docker compose` | `podman-compose` or `podman compose` |
-| Daemon | Required | Daemonless |
-| Root | Default (can be rootless) | Rootless by default |
-| SELinux | N/A | Uses `:Z` volume labels |
-
-### Installing Podman Compose
+### Docker
 
 ```bash
-# Fedora/RHEL/CentOS
-sudo dnf install podman-compose
-
-# Ubuntu/Debian
-pip install podman-compose
-
-# Or use podman with docker-compose compatibility
-sudo dnf install podman-docker  # Fedora
+docker compose up -d          # Start
+docker compose down           # Stop
+docker compose down -v        # Stop and delete data
+docker compose logs -f        # View logs
+docker compose logs -f auth   # View specific service logs
+docker compose ps             # Check status
 ```
 
-### Podman-Specific Notes
-
-1. **Rootless mode**: Podman runs rootless by default, which is more secure
-2. **SELinux**: Volume mounts use `:Z` labels for SELinux compatibility
-3. **Named volumes**: Database and storage use named volumes for better compatibility
-4. **Socket**: No daemon socket required
-
----
-
-## Command Reference
-
-### Using Docker
+### Podman
 
 ```bash
-# Start all services
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# View specific service logs
-docker compose logs -f auth
-
-# Stop all services
-docker compose down
-
-# Stop and remove volumes (WARNING: deletes all data)
-docker compose down -v
-
-# Restart a specific service
-docker compose restart auth
-
-# Check service status
-docker compose ps
+export DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock
+docker-compose up -d
+docker-compose down
 ```
 
-### Using Podman
+### Supabase CLI
 
 ```bash
-# Start all services
-podman-compose up -d
-
-# View logs
-podman-compose logs -f
-
-# View specific service logs
-podman-compose logs -f auth
-
-# Stop all services
-podman-compose down
-
-# Stop and remove volumes (WARNING: deletes all data)
-podman-compose down -v
-
-# Restart a specific service
-podman-compose restart auth
-
-# Check service status
-podman-compose ps
-
-# List volumes
-podman volume ls
+npx supabase start            # Start local development
+npx supabase stop             # Stop
+npx supabase stop --no-backup # Stop and delete data
+npx supabase status           # Check status
+npx supabase db reset         # Reset database
 ```
 
----
-
-## Data Persistence
-
-Data is persisted in named volumes:
-- `supabase_db-data` - PostgreSQL data
-- `supabase_storage-data` - Uploaded files
-
-To inspect volumes:
-```bash
-# Docker
-docker volume ls
-docker volume inspect supabase_db-data
-
-# Podman
-podman volume ls
-podman volume inspect supabase_db-data
-```
-
----
-
-## Production Considerations
+## Production Checklist
 
 Before deploying to production:
 
-1. **Change all secrets** in `.env`
-2. **Enable HTTPS** via a reverse proxy (nginx, Traefik, Caddy)
-3. **Configure SMTP** for email verification
-4. **Set proper CORS origins** in Kong configuration
-5. **Enable rate limiting** and security headers
-6. **Set up backups** for PostgreSQL data
-7. **Use proper domain names** instead of localhost
+- [ ] Change all secrets in `.env`
+- [ ] Generate new JWT keys with your JWT_SECRET
+- [ ] Set up HTTPS via reverse proxy (nginx, Traefik, Caddy)
+- [ ] Configure SMTP for email verification
+- [ ] Set proper CORS origins
+- [ ] Enable rate limiting
+- [ ] Set up database backups
+- [ ] Use proper domain names
+- [ ] Review security settings
 
----
-
-## Troubleshooting
-
-### Database connection issues
-```bash
-# Docker
-docker compose logs db
-docker compose exec db pg_isready -U postgres
-
-# Podman
-podman-compose logs db
-podman exec supabase-db pg_isready -U postgres
-```
-
-### Auth not working
-```bash
-# Check auth logs
-docker compose logs auth  # or podman-compose logs auth
-
-# Verify JWT secret matches between services
-```
-
-### Studio not loading
-```bash
-# Check studio and meta logs
-docker compose logs studio meta  # or podman-compose
-```
-
-### Podman permission issues
-```bash
-# If you see permission denied errors, try:
-podman unshare chown -R 1000:1000 ./volumes
-
-# Or run with SELinux disabled (not recommended for production)
-podman-compose --podman-run-args="--security-opt label=disable" up -d
-```
-
-### Reset everything
-```bash
-# Docker
-docker compose down -v
-docker compose up -d
-
-# Podman
-podman-compose down -v
-podman volume prune
-podman-compose up -d
-```
-
----
-
-## Updating Supabase
-
-To update to newer versions, update the image tags in `docker-compose.yml` and run:
+## Updating
 
 ```bash
-# Docker
+# Pull latest images
 docker compose pull
 docker compose up -d
 
-# Podman
-podman-compose pull
-podman-compose up -d
+# Check Supabase releases for compatibility
+# https://github.com/supabase/supabase/releases
 ```
 
-Check the [Supabase releases](https://github.com/supabase/supabase/releases) for version compatibility.
+## Troubleshooting
+
+### Check service health
+
+```bash
+docker compose ps
+docker compose logs auth
+docker compose logs db
+```
+
+### Database connection issues
+
+```bash
+docker compose exec db pg_isready -U postgres
+```
+
+### Reset everything
+
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+## Resources
+
+- [Official Self-Hosting Docs](https://supabase.com/docs/guides/self-hosting)
+- [Supabase GitHub](https://github.com/supabase/supabase)
+- [Docker Compose Reference](https://github.com/supabase/supabase/tree/master/docker)

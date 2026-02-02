@@ -1,3 +1,29 @@
+#!/usr/bin/env bash
+#
+# Generate Kong configuration with API keys substituted
+#
+
+set -e
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SUPABASE_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Load environment variables (only the ones we need)
+if [ -f "$SUPABASE_DIR/.env" ]; then
+    ANON_KEY=$(grep "^ANON_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2)
+    SERVICE_ROLE_KEY=$(grep "^SERVICE_ROLE_KEY=" "$SUPABASE_DIR/.env" | cut -d= -f2)
+
+    if [ -z "$ANON_KEY" ] || [ -z "$SERVICE_ROLE_KEY" ]; then
+        echo "Error: ANON_KEY or SERVICE_ROLE_KEY not found in .env"
+        exit 1
+    fi
+else
+    echo "Error: .env file not found at $SUPABASE_DIR/.env"
+    exit 1
+fi
+
+# Generate kong.yml
+cat > "$SUPABASE_DIR/volumes/kong/kong.yml" << EOF
 _format_version: "2.1"
 _transform: true
 
@@ -8,10 +34,10 @@ consumers:
   - username: DASHBOARD
   - username: anon
     keyauth_credentials:
-      - key: ${SUPABASE_ANON_KEY}
+      - key: ${ANON_KEY}
   - username: service_role
     keyauth_credentials:
-      - key: ${SUPABASE_SERVICE_KEY}
+      - key: ${SERVICE_ROLE_KEY}
 
 ###
 ### Access Control List
@@ -157,3 +183,6 @@ services:
           hide_groups_header: true
           allow:
             - admin
+EOF
+
+echo "Kong configuration generated at $SUPABASE_DIR/volumes/kong/kong.yml"

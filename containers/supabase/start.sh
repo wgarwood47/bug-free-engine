@@ -30,17 +30,21 @@ log_error() {
 # Check for .env file
 if [ ! -f ".env" ]; then
     log_warn ".env file not found"
-    if [ -f ".env.example" ]; then
-        log_info "Copying .env.example to .env"
-        cp .env.example .env
-        log_warn "Please edit .env with your secrets before continuing"
-        log_info "Generate secrets with:"
-        echo "  openssl rand -base64 32  # JWT_SECRET"
-        echo "  openssl rand -base64 64  # SECRET_KEY_BASE"
-        echo "  openssl rand -base64 24  # POSTGRES_PASSWORD"
-        exit 1
+    echo ""
+    if [ -f "./scripts/setup.sh" ]; then
+        log_info "Run the setup script to generate secrets and create .env files:"
+        echo "  ./scripts/setup.sh"
+        echo ""
+        read -p "Run setup now? (Y/n) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Nn]$ ]]; then
+            ./scripts/setup.sh
+        else
+            exit 1
+        fi
     else
-        log_error ".env.example not found"
+        log_info "Create .env from example and add your secrets:"
+        echo "  cp .env.example .env"
         exit 1
     fi
 fi
