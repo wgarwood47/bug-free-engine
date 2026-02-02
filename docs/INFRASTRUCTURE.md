@@ -56,7 +56,7 @@ The self-hosted Supabase stack runs 10 containerized services:
 
 | Service | Version | Port | Purpose |
 |---------|---------|------|---------|
-| PostgreSQL | 15.6.1 | 5432 | Core relational database |
+| PostgreSQL | 15.8.1 | 5432 | Core relational database |
 | Kong | 2.8.1 | 8000, 8443 | API Gateway & reverse proxy |
 | GoTrue | 2.158.1 | - | Authentication service |
 | PostgREST | 12.2.0 | - | Auto-generated REST API |
