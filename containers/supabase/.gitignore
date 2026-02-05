@@ -1,0 +1,10 @@
+# Environment file with secrets
+.env
+
+# Data volumes (persisted locally)
+volumes/db/data/
+volumes/storage/*
+!volumes/storage/.gitkeep
+
+# Logs
+*.log
